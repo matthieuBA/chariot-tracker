@@ -32,22 +32,23 @@ if (!fs.existsSync(DATA_DIR)) {
 
 // Données par défaut
 const defaultChariots = [
-  { id: 1, nom: 'Chariot 1', etage: 1, etat: 'cuisine', actif: true },
-  { id: 2, nom: 'Chariot 2', etage: 2, etat: 'cuisine', actif: true },
-  { id: 3, nom: 'Chariot 3', etage: 3, etat: 'service', actif: true },
-  { id: 4, nom: 'Chariot 4', etage: 4, etat: 'cuisine', actif: true },
-  { id: 5, nom: 'Chariot 5', etage: 5, etat: 'service', actif: true },
-  { id: 6, nom: 'Chariot 6', etage: 6, etat: 'cuisine', actif: true },
-  { id: 7, nom: 'Chariot 7', etage: 7, etat: 'cuisine', actif: true },
-  { id: 8, nom: 'Chariot 8', etage: 8, etat: 'service', actif: true },
-  { id: 9, nom: 'Chariot 9', etage: 9, etat: 'cuisine', actif: true },
-  { id: 10, nom: 'Chariot 10', etage: 10, etat: 'cuisine', actif: true },
-  { id: 11, nom: 'Chariot 11', etage: 11, etat: 'service', actif: true },
-  { id: 12, nom: 'Chariot 12', etage: 12, etat: 'cuisine', actif: true },
-  { id: 13, nom: 'Chariot 13', etage: 13, etat: 'cuisine', actif: true },
-  { id: 14, nom: 'Chariot 14', etage: 14, etat: 'service', actif: true },
-  { id: 15, nom: 'Chariot 15', etage: 15, etat: 'cuisine', actif: true },
-  { id: 16, nom: 'Chariot 16', etage: 16, etat: 'cuisine', actif: true }
+  { id: 1, nom: 'chir A', etage: 1, etat: 'cuisine', actif: true },
+  { id: 2, nom: 'Chir B1', etage: 1, etat: 'cuisine', actif: true },
+  { id: 3, nom: 'Chir B2', etage: 1, etat: 'service', actif: true },
+  { id: 4, nom: 'Chir C', etage: 1, etat: 'cuisine', actif: true },
+  { id: 5, nom: 'Med A', etage: 1, etat: 'service', actif: true },
+  { id: 6, nom: 'Med B', etage: 1, etat: 'cuisine', actif: true },
+  { id: 7, nom: 'Med C', etage: 1, etat: 'cuisine', actif: true },
+  { id: 8, nom: 'Med D', etage: 2, etat: 'service', actif: true },
+  { id: 9, nom: 'Med E', etage: 2, etat: 'cuisine', actif: true },
+  { id: 10, nom: 'Mat', etage: 2, etat: 'cuisine', actif: true },
+  { id: 11, nom: 'Ped', etage: 2, etat: 'service', actif: true },
+  { id: 12, nom: 'Privé', etage: 3, etat: 'cuisine', actif: true },
+  { id: 13, nom: 'Demi Privé', etage: 3, etat: 'cuisine', actif: true },
+  { id: 14, nom: 'Urgence', etage: 0, etat: 'service', actif: true },
+  { id: 15, nom: 'Onco', etage: 0, etat: 'cuisine', actif: true },
+  { id: 16, nom: 'HDJ', etage: 1, etat: 'cuisine', actif: true },
+  { id: 17, nom: 'Soins', etage: 0, etat: 'cuisine', actif: true }
 ];
 
 // Fonctions utilitaires
