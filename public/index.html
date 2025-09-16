@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suivi Chariots Repas</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/socket.io-client@4/dist/socket.io.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: system-ui, -apple-system, sans-serif; 
+        }
+        /* Pour éviter le flash de contenu non stylé */
+        #root { min-height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background-color: #f3f4f6;">
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 16px;">⏳</div>
+                <div>Chargement de l'application...</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Configuration - l'URL change automatiquement selon l'environnement
+        const SERVER_URL = window.location.origin;
+
+        const users = [
+            { pin: '1234', role: 'transporteur', nom: 'Jean' },
+            { pin: '0000', role: 'superviseur', nom: 'Admin' }
+        ];
+
+        function ChariotTracker() {
+            const [user, setUser] = useState(null);
+            const [pin, setPin] = useState('');
+            const [chariots, setChariots] = useState([]);
+            const [filtre, setFiltre] = useState('tous');
+            const [recherche, setRecherche] = useState('');
+            const [ecran, setEcran] = useState('dashboard');
+            const [historique, setHistorique] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [connected, setConnected] = useState(false);
+
+            // Chargement initial des données depuis le serveur
+            useEffect(() => {
+                Promise.all([
+                    fetch(`${SERVER_URL}/api/chariots`).then(r => r.json()),
+                    fetch(`${SERVER_URL}/api/historique`).then(r => r.json())
+                ])
+                .then(([chariotsData, historiqueData]) => {
+                    setChariots(chariotsData);
+                    setHistorique(historiqueData);
+                    setLoading(false);
+                    setConnected(true);
+                })
+                .catch(err => {
+                    console.log('Erreur chargement:', err);
+                    setLoading(false);
+                    setConnected(false);
+                });
+            }, []);
+
+            // WebSocket pour synchro temps réel
+            useEffect(() => {
+                const socket = io();
+                
+                socket.on('connect', () => {
+                    console.log('🔗 Socket connecté');
+                    setConnected(true);
+                });
+                
+                socket.on('chariots_updated', (data) => {
+                    setChariots(data);
+                });
+                
+                socket.on('historique_updated', (data) => {
+                    setHistorique(data);
+                });
+                
+                socket.on('disconnect', () => {
+                    console.log('❌ Socket déconnecté');
+                    setConnected(false);
+                });
+                
+                return () => socket.disconnect();
+            }, []);
+
+            // Connexion
+            const handleLogin = () => {
+                const foundUser = users.find(u => u.pin === pin);
+                if (foundUser) {
+                    setUser(foundUser);
+                    setPin('');
+                } else {
+                    alert('PIN incorrect');
+                }
+            };
+
+            // Action sur chariot - via API
+            const changerEtat = async (chariotId, nouvelEtat) => {
+                try {
+                    const response = await fetch(`${SERVER_URL}/api/chariots/${chariotId}/etat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            nouvelEtat,
+                            utilisateur: user.nom
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Erreur serveur');
+                    }
+                } catch (error) {
+                    alert('Erreur: ' + error.message);
+                }
+            };
+
+            // Sauvegarde chariots admin - via API
+            const sauverChariots = async (nouveauxChariots) => {
+                try {
+                    await fetch(`${SERVER_URL}/api/chariots`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chariots: nouveauxChariots,
+                            utilisateur: user.nom
+                        })
+                    });
+                } catch (error) {
+                    alert('Erreur sauvegarde: ' + error.message);
+                }
+            };
+
+            // Vider historique - via API
+            const viderHistorique = async () => {
+                try {
+                    await fetch(`${SERVER_URL}/api/historique`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ utilisateur: user.nom })
+                    });
+                } catch (error) {
+                    alert('Erreur: ' + error.message);
+                }
+            };
+
+            // Filtrage
+            const chariotsFiltrés = chariots
+                .filter(c => c.actif)
+                .filter(c => filtre === 'tous' || c.etat === filtre)
+                .filter(c => c.nom.toLowerCase().includes(recherche.toLowerCase()));
+
+            // Écran de connexion
+            if (!user) {
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                        <div className="bg-white p-8 rounded-lg shadow-lg max-w-sm w-full">
+                            <h1 className="text-2xl font-bold text-center mb-6">Suivi Chariots</h1>
+                            
+                            <div className={`text-center text-sm mb-4 p-2 rounded ${
+                                connected ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                                {connected ? '🟢 Serveur connecté' : '🟡 Reconnexion...'}
+                            </div>
+
+                            {loading ? (
+                                <div className="text-center">Chargement...</div>
+                            ) : (
+                                <>
+                                    <input
+                                        type="password"
+                                        placeholder="Code PIN"
+                                        value={pin}
+                                        onChange={(e) => setPin(e.target.value)}
+                                        className="w-full p-3 border rounded-lg text-center text-xl mb-4"
+                                        maxLength="4"
+                                        onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                                    />
+                                    <button
+                                        onClick={handleLogin}
+                                        className="w-full bg-blue-500 text-white p-3 rounded-lg font-semibold"
+                                    >
+                                        Connexion
+                                    </button>
+                                    <div className="mt-4 text-sm text-gray-600 text-center">
+                                        <p>Demo: 1234 (transporteur) ou 0000 (admin)</p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Navigation
+            const Navigation = () => (
+                <div className="bg-white shadow-sm p-4 flex justify-between items-center">
+                    <div>
+                        <h1 className="text-lg font-semibold">Chariots Repas</h1>
+                        <div className={`text-xs ${connected ? 'text-green-600' : 'text-yellow-600'}`}>
+                            {connected ? '🟢 Synchronisé' : '🟡 Reconnexion...'}
+                        </div>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                        <button
+                            onClick={() => setEcran('dashboard')}
+                            className={`px-3 py-1 rounded text-sm ${ecran === 'dashboard' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                        >
+                            Dashboard
+                        </button>
+                        <button
+                            onClick={() => setEcran('historique')}
+                            className={`px-3 py-1 rounded text-sm ${ecran === 'historique' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                        >
+                            Historique
+                        </button>
+                        {user.role === 'superviseur' && (
+                            <button
+                                onClick={() => setEcran('admin')}
+                                className={`px-3 py-1 rounded text-sm ${ecran === 'admin' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                            >
+                                Admin
+                            </button>
+                        )}
+                        <button
+                            onClick={() => setUser(null)}
+                            className="px-3 py-1 bg-red-500 text-white rounded text-sm"
+                        >
+                            Déco
+                        </button>
+                    </div>
+                </div>
+            );
+
+            // Dashboard principal
+            if (ecran === 'dashboard') {
+                return (
+                    <div className="min-h-screen bg-gray-100">
+                        <Navigation />
+                        
+                        {/* Filtres */}
+                        <div className="p-4 bg-white shadow-sm">
+                            <div className="flex flex-wrap gap-2 mb-3">
+                                <button
+                                    onClick={() => setFiltre('tous')}
+                                    className={`px-3 py-2 rounded text-sm ${filtre === 'tous' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                                >
+                                    Tous ({chariots.filter(c => c.actif).length})
+                                </button>
+                                <button
+                                    onClick={() => setFiltre('cuisine')}
+                                    className={`px-3 py-2 rounded text-sm ${filtre === 'cuisine' ? 'bg-gray-500 text-white' : 'bg-gray-200'}`}
+                                >
+                                    Cuisine ({chariots.filter(c => c.actif && c.etat === 'cuisine').length})
+                                </button>
+                                <button
+                                    onClick={() => setFiltre('service')}
+                                    className={`px-3 py-2 rounded text-sm ${filtre === 'service' ? 'bg-green-500 text-white' : 'bg-gray-200'}`}
+                                >
+                                    Service ({chariots.filter(c => c.actif && c.etat === 'service').length})
+                                </button>
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Rechercher un chariot..."
+                                value={recherche}
+                                onChange={(e) => setRecherche(e.target.value)}
+                                className="w-full p-2 border rounded text-sm"
+                            />
+                        </div>
+
+                        {/* Grille des chariots */}
+                        <div className="p-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                            {chariotsFiltrés.map(chariot => (
+                                <div
+                                    key={chariot.id}
+                                    className={`p-4 rounded-lg shadow text-center ${
+                                        chariot.etat === 'cuisine' ? 'bg-gray-300' : 'bg-green-300'
+                                    }`}
+                                    style={{ minHeight: '44px' }}
+                                >
+                                    <div className="font-semibold text-sm">{chariot.nom}</div>
+                                    <div className="text-xs">Étage {chariot.etage}</div>
+                                    <div className="text-xs mb-2">
+                                        {chariot.etat === 'cuisine' ? 'En cuisine' : `Service É${chariot.etage}`}
+                                    </div>
+                                    
+                                    {user.role === 'transporteur' && (
+                                        <button
+                                            onClick={() => changerEtat(
+                                                chariot.id, 
+                                                chariot.etat === 'cuisine' ? 'service' : 'cuisine'
+                                            )}
+                                            className={`w-full py-2 px-3 rounded text-white font-semibold text-sm ${
+                                                chariot.etat === 'cuisine' 
+                                                    ? 'bg-green-600 hover:bg-green-700' 
+                                                    : 'bg-gray-600 hover:bg-gray-700'
+                                            }`}
+                                            style={{ minHeight: '44px' }}
+                                        >
+                                            {chariot.etat === 'cuisine' ? 'Monter' : 'Descendre'}
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Historique
+            if (ecran === 'historique') {
+                return (
+                    <div className="min-h-screen bg-gray-100">
+                        <Navigation />
+                        <div className="p-4">
+                            <h2 className="text-xl font-semibold mb-4">Historique des actions</h2>
+                            <div className="bg-white rounded-lg shadow max-h-96 overflow-y-auto">
+                                {historique.length === 0 ? (
+                                    <div className="p-4 text-center text-gray-500">Aucune action enregistrée</div>
+                                ) : (
+                                    historique.map(action => (
+                                        <div key={action.id} className="p-4 border-b flex justify-between items-start">
+                                            <div className="flex-1">
+                                                <div className="font-semibold text-sm">{action.chariot}</div>
+                                                <div className="text-sm text-gray-600">{action.action}</div>
+                                                <div className="text-xs text-gray-500">Par: {action.utilisateur}</div>
+                                            </div>
+                                            <div className="text-xs text-gray-500 whitespace-nowrap ml-2">
+                                                {action.timestamp}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Admin (pour superviseurs)
+            if (ecran === 'admin' && user.role === 'superviseur') {
+                return (
+                    <div className="min-h-screen bg-gray-100">
+                        <Navigation />
+                        <div className="p-4">
+                            <h2 className="text-xl font-semibold mb-4">Administration</h2>
+                            
+                            <div className="bg-white rounded-lg shadow p-4 mb-4">
+                                <h3 className="font-semibold mb-2">Gestion des chariots</h3>
+                                <div className="grid gap-2 max-h-96 overflow-y-auto">
+                                    {chariots.map(chariot => (
+                                        <div key={chariot.id} className="flex items-center gap-2 p-2 border rounded text-sm">
+                                            <input
+                                                type="text"
+                                                value={chariot.nom}
+                                                onChange={(e) => {
+                                                    const nouveauxChariots = chariots.map(c => 
+                                                        c.id === chariot.id ? { ...c, nom: e.target.value } : c
+                                                    );
+                                                    sauverChariots(nouveauxChariots);
+                                                }}
+                                                className="p-1 border rounded flex-1 text-sm"
+                                            />
+                                            <span className="text-xs">Étage:</span>
+                                            <input
+                                                type="number"
+                                                value={chariot.etage}
+                                                onChange={(e) => {
+                                                    const nouveauxChariots = chariots.map(c => 
+                                                        c.id === chariot.id ? { ...c, etage: parseInt(e.target.value) } : c
+                                                    );
+                                                    sauverChariots(nouveauxChariots);
+                                                }}
+                                                className="p-1 border rounded w-16 text-sm"
+                                                min="1"
+                                                max="20"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    const nouveauxChariots = chariots.map(c => 
+                                                        c.id === chariot.id ? { ...c, actif: !c.actif } : c
+                                                    );
+                                                    sauverChariots(nouveauxChariots);
+                                                }}
+                                                className={`px-2 py-1 rounded text-xs ${
+                                                    chariot.actif ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                                                }`}
+                                                style={{ minHeight: '32px' }}
+                                            >
+                                                {chariot.actif ? 'Actif' : 'Inactif'}
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-lg shadow p-4">
+                                <h3 className="font-semibold mb-2">Actions rapides</h3>
+                                <div className="flex gap-2 flex-wrap">
+                                    <button
+                                        onClick={() => {
+                                            if (confirm('Remettre tous les chariots en cuisine ?')) {
+                                                const nouveauxChariots = chariots.map(c => ({ ...c, etat: 'cuisine' }));
+                                                sauverChariots(nouveauxChariots);
+                                            }
+                                        }}
+                                        className="bg-orange-500 text-white px-4 py-2 rounded text-sm"
+                                        style={{ minHeight: '44px' }}
+                                    >
+                                        Tous en cuisine
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (confirm('Effacer tout l\'historique ?')) {
+                                                viderHistorique();
+                                            }
+                                        }}
+                                        className="bg-red-500 text-white px-4 py-2 rounded text-sm"
+                                        style={{ minHeight: '44px' }}
+                                    >
+                                        Vider historique
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return null;
+        }
+
+        // Rendre l'app
+        ReactDOM.render(<ChariotTracker />, document.getElementById('root'));
+    </script>
+</body>
+</html>
